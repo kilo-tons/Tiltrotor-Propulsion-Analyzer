@@ -3,11 +3,15 @@ from enum import Enum
 
 
 # Underlying APIs to encode/decode frames
+from PyQt5.QtCore import QTimer
+
+
 class Function(Enum):
     READ = 0x01
     WRITE = 0x02
     RESPOND = 0x03
     STOP = 0x04
+    HEARTBEAT = 0x05
 
 
 # Copied
@@ -50,11 +54,9 @@ def crc16_ccitt(buf: bytes, length: int):
     # Fixed poly for this implementation
     crc = 0xFFFF
 
-    i = 0
-    while i < length:
+    for i in range(length):
         crc = (crc << 8) ^ table[(crc >> 8) ^ buf[i]]
-        crc &= 0x00FF
-        i += 1
+        crc &= 0xFFFF
 
     return crc
 
@@ -79,7 +81,7 @@ def mcu_packet_encode(function: Enum, params: int):
         elif params < 1100:
             params = 1100
 
-    elif function.value == Function.STOP:
+    elif function.value == Function.STOP or function.value == Function.HEARTBEAT:
         # Ignore params
         params = 0
 
@@ -134,6 +136,7 @@ class MCUSerialManager(QtCore.QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.serial = QtSerialPort.QSerialPort(self)
+        self.timer = QTimer(self)
 
     @QtCore.pyqtSlot(str, int, int)
     def run(self, portname: str, baudrate: int, polling_rate: int):
@@ -155,6 +158,13 @@ class MCUSerialManager(QtCore.QObject):
         buf = mcu_packet_encode(Function.READ, polling_rate)
         self.serial.write(buf)
         self.serial.flush()
+
+        # Send heartbeat
+        self.send_heartbeat()
+        
+        # Set heartbeat timer
+        self.timer.start(1000) # 1s heartbeat
+        self.timer.timeout.connect(self.send_heartbeat)
 
         # Update UI
         self.portStatus.emit(True)
@@ -186,6 +196,12 @@ class MCUSerialManager(QtCore.QObject):
                 self.updateData.emit(rpm, wind_speed)
 
     @QtCore.pyqtSlot()
+    def send_heartbeat(self):
+        buf = mcu_packet_encode(Function.HEARTBEAT, 0x00)
+        self.serial.write(buf)
+        self.serial.flush()
+
+    @QtCore.pyqtSlot()
     def close(self):
         if not self.serial.isOpen:
             print("Port is not open")
@@ -196,6 +212,9 @@ class MCUSerialManager(QtCore.QObject):
         self.serial.flush()
 
         self.serial.close()
+
+        # Turn off heartbeat timer
+        self.timer.stop()
 
         # Update UI
         self.portStatus.emit(False)
