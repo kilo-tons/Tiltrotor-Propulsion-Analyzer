@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QTextEdit
+from PyQt5.QtWidgets import QApplication
 import src.ui
 
 

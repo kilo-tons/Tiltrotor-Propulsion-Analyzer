@@ -1,5 +1,6 @@
 from PyQt5 import QtCore, QtSerialPort
 from enum import Enum
+import time
 
 
 # Underlying APIs to encode/decode frames
@@ -72,14 +73,14 @@ def mcu_packet_encode(function: Enum, params: int):
         elif params < 1:
             params = 1
 
-    elif function.value == Function.WRITE:
-        # params is PWM high time (1100 - 1900ms)
-        # Sanity check, constraining
-        if params > 1900:
-            params = 1900
-
-        elif params < 1100:
-            params = 1100
+    # elif function.value == Function.WRITE:
+    #     # params is PWM high time (1100 - 1900ms)
+    #     # Sanity check, constraining
+    #     if params > 1900:
+    #         params = 1900
+    #
+    #     elif params < 1100:
+    #         params = 1100
 
     elif function.value == Function.STOP or function.value == Function.HEARTBEAT:
         # Ignore params
@@ -113,16 +114,22 @@ def mcu_packet_decode(buf: bytes):
     if not len(buf) == 12:
         return [0, 0.0, False]
 
-    if not (buf[0] == 0x42 and buf[1] == 0x4B and buf[11] == 0x4B and buf[2] == 0x03):
+    if not (buf[0] == b'B' and buf[1] == b'K' and buf[11] == b'K' and buf[2] == b'\x03'):
         return [0, 0.0, False]
 
-    crc16 = buf[9] << 8 | buf[10]
-    if not (crc16 == crc16_ccitt(buf, 9)):
+    # Python are storing the buffer in bytes, required to convert to "uint8" variables
+    int_buf = list(range(len(buf)))
+    for i in int_buf:
+        int_buf[i] = int.from_bytes(buf[i], "big")
+
+    crc16 = int_buf[9] << 8 | int_buf[10]
+
+    if not (crc16 == crc16_ccitt(int_buf, 9)):
         return [0, 0.0, False]
 
     # Begin decoding
-    rpm = buf[3] << 8 | buf[4]
-    wind_speed = (buf[5] << 8 | buf[6]) / 1000  # In m/s
+    rpm = int_buf[3] << 8 | int_buf[4]
+    wind_speed = float((int_buf[5] << 8 | int_buf[6]) / 1000)  # In m/s
 
     return [rpm, wind_speed, True]
 
@@ -137,6 +144,11 @@ class MCUSerialManager(QtCore.QObject):
         super().__init__(parent)
         self.serial = QtSerialPort.QSerialPort(self)
         self.timer = QTimer(self)
+
+        # Data holder
+        self.data = [0, 0.0]
+
+        self.updateData.connect(self.update_data)
 
     @QtCore.pyqtSlot(str, int, int)
     def run(self, portname: str, baudrate: int, polling_rate: int):
@@ -161,7 +173,7 @@ class MCUSerialManager(QtCore.QObject):
 
         # Send heartbeat
         self.send_heartbeat()
-        
+
         # Set heartbeat timer
         self.timer.start(1000) # 1s heartbeat
         self.timer.timeout.connect(self.send_heartbeat)
@@ -180,20 +192,23 @@ class MCUSerialManager(QtCore.QObject):
 
     @QtCore.pyqtSlot()
     def receive(self):
-        while self.serial.bytesAvailable() == 12:
+        while self.serial.bytesAvailable():
+            # This should avoid any delay problem from any major task execution
+            if (self.serial.bytesAvailable() % 12) != 0:
+                return
+
             buf = self.serial.readAll()
-
-            # Debug
-            print(buf)
-
             [rpm, wind_speed, valid] = mcu_packet_decode(buf)
 
             if valid:
-                # Debug
-                print("rpm =", rpm, "wind speed =", wind_speed)
-
                 # Emit changes
                 self.updateData.emit(rpm, wind_speed)
+
+    def return_data(self):
+        return self.data
+
+    def update_data(self, rpm: int, wind_speed: float):
+        self.data = [rpm, wind_speed]
 
     @QtCore.pyqtSlot()
     def send_heartbeat(self):
@@ -218,3 +233,4 @@ class MCUSerialManager(QtCore.QObject):
 
         # Update UI
         self.portStatus.emit(False)
+
