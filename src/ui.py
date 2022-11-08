@@ -16,11 +16,16 @@ def force_scale(x):
     # return ((-2069.9692 * x + 2.5339) / 1000) * 9.8067
     # return ((-236.9447)*x*x*x - 552.1514*x*x - 2494.5821*x - 24.7020) / 1000 * 9.8067
     # return x
-    return -10.836 * x +0.0009
+    # return -10.836 * x +0.0009 % Old loadcell, DEAD
+    # return -30.41 * x + 0.1676
+    return -29.833 * x + 0.1644
+    # return x
+
 
 def torque_scale(x):
-    #return x
-    return -0.3104 * x + 0.0018
+    # return x
+    # return -0.3104 * x + 0.0018 % Old loadcell, DEAD
+    return -0.5985*x - 0.0006
 
 
 class MainWindow(QMainWindow):
@@ -502,6 +507,7 @@ class FileExportPanel(QWidget):
     def filename_received(self, file_name: str):
         if file_name:
             self.filepath_path.setText(file_name)
+
 
 class AdvancedFunction(QWidget):
     def __init__(self):

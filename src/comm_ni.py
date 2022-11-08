@@ -1,5 +1,5 @@
 import nidaqmx
-from nidaqmx.constants import TerminalConfiguration
+from nidaqmx.constants import TerminalConfiguration, AcquisitionType, Edge
 from nidaqmx import system
 from PyQt5 import QtCore
 from PyQt5.QtCore import QTimer
@@ -34,6 +34,13 @@ class NiDAQManager(QtCore.QObject):
                                                   terminal_config=TerminalConfiguration.RSE)
 
         self.samples_per_scan = int(samples_per_second / 10)
+
+        # Set sample rate, testing.
+        self.task.timing.cfg_samp_clk_timing(samples_per_second,
+                                             source="",
+                                             active_edge=Edge.RISING,
+                                             sample_mode=AcquisitionType.FINITE,
+                                             samps_per_chan=self.samples_per_scan)
 
         self.timer.timeout.connect(self.read)
 

@@ -8,12 +8,15 @@ def force_scale(x):
     # return ((-2069.9692 * x + 2.5339) / 1000) * 9.8067
     # return ((-236.9447)*x*x*x - 552.1514*x*x - 2494.5821*x - 24.7020) / 1000 * 9.8067
     # return x
-    return -10.836 * x +0.0009
+    # return -10.836 * x +0.0009 % Old load cell
+    # return -30.41 * x + 0.1676
+    return -29.833 * x + 0.1644
 
 
 def torque_scale(x):
     #return x
-    return -0.3104 * x + 0.0018
+    # return -0.3104 * x + 0.0018 % Old load cell
+    return -0.5985*x - 0.0006
 
 
 class ExportWorker(QtCore.QObject):
